@@ -1,0 +1,14 @@
+.masked-input__wrapper {
+    border: 1px solid black;
+    padding: 1rem;
+}
+
+.masked-input__group {
+    display: flex;
+}
+
+.masked-input__calendar {
+    margin-top: .5rem;
+    position: absolute;
+    background-color: white;
+}

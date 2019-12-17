@@ -1,0 +1,11 @@
+<ng-container *ngIf="formControlName && formControl">
+    <div class="masked-input__wrapper">
+        <div [formGroup]="formGroup" class="masked-input__group">
+            <input [placeholder]="placeholder" (blur)="onInputBlur($event)" [value]="formGroup.get(formControlName).value | transformDate: format" [mask]="mask" [dropSpecialCharacters]="false" />
+            <button (click)="togglePicker()" type=" button">Pick</button>
+        </div>
+        <div class="masked-input__calendar">
+            <ngb-datepicker #dp *ngIf="datePickerVisible" (select)="togglePicker()" [(ngModel)]="datePickerValue" (navigate)="date = $event.next"></ngb-datepicker>
+        </div>
+    </div>
+</ng-container>
