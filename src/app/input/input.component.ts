@@ -1,154 +1,119 @@
-import { Component, OnInit, Input, forwardRef, HostListener, ElementRef, Optional, OnChanges, SimpleChanges, ChangeDetectorRef, ChangeDetectionStrategy, DoCheck, Inject } from '@angular/core';
-import { FormControl, NG_VALUE_ACCESSOR, ControlContainer, FormGroup, ControlValueAccessor, NgForm, ReactiveFormsModule, FormBuilder, NG_VALIDATORS, AbstractControl, Validator, ValidationErrors } from '@angular/forms';
-import { NgbDateAdapter, NgbDateNativeAdapter, NgbDateParserFormatter, NgbDateStruct } from '@ng-bootstrap/ng-bootstrap';
-import { DynamicNgbDateParserFormatter } from '../date-parser';
+import { Component, forwardRef, OnInit, Input, OnChanges, SimpleChanges, Optional, Host, SkipSelf } from '@angular/core';
+import { Validator, NG_VALUE_ACCESSOR, NG_VALIDATORS, ControlValueAccessor, FormGroup, FormControl, AbstractControl, ValidationErrors, ControlContainer } from '@angular/forms';
+import { NgbDateAdapter, NgbDateNativeAdapter } from '@ng-bootstrap/ng-bootstrap';
+import { initialConfig as NgxDefaultConfig, config as NgxMaskConfig } from 'ngx-mask';
 import { GsoDate } from '../date.service';
 
+/**
+ * A custom date picker input that joins Ngx-Mask and NgbDatePicker directives to be used with **REACTIVE FORMS**
+ * @param format {string} 'MM/dd/y' - Uses Angular's Date Pipe formatting (@see https://angular.io/api/common/DatePipe)
+ * @param mask {string} '00/00/0000' - Uses Ngx-Mask's formatting (@see https://www.npmjs.com/package/ngx-mask)
+ * @param placeholder {string} 'Date' - What the field says while it's falsey
+ * @example
+ * <form [formGroup]="formGroup">
+ *    <masked-date-picker-input formControlName="your-form-control-name"></masked-date-picker-input>
+ * </form>
+ */
 @Component({
   selector: 'masked-date-picker-input',
   templateUrl: './input.component.html',
   styleUrls: ['./input.component.scss'],
   providers: [
     {
-      provide: NG_VALUE_ACCESSOR,
-      useExisting: forwardRef(() => MaskedDatePickerInputComponent),
+      provide: NG_VALUE_ACCESSOR, // Informs Angular about our custom control value accessor control
+      useExisting: forwardRef(() => MaskedDatePickerInputComponent), // 
       multi: true
     },
     {
-      provide: NG_VALIDATORS,
+      provide: NG_VALIDATORS, // Updates validations in parent form group
       useExisting: forwardRef(() => MaskedDatePickerInputComponent),
       multi: true
     },
-    { provide: NgbDateAdapter, useClass: NgbDateNativeAdapter },
-    { provide: NgbDateParserFormatter, useClass: DynamicNgbDateParserFormatter },
-    // { provide: Token, useValue: 'Sample' },
-    // GsoDate
+    { provide: NgbDateAdapter, useClass: NgbDateNativeAdapter }, // Parses selected dates from NgbCalendar into Date object
+    { provide: NgxMaskConfig, useValue: NgxDefaultConfig },
   ]
 })
 export class MaskedDatePickerInputComponent implements OnInit, ControlValueAccessor, Validator {
-  @Input() disabled: boolean;
   @Input() format: string = 'MM/dd/y';
   @Input() formControlName: string;
   @Input() mask: string = '00/00/0000';
-  @Input() placeholder: string;
-  @Input() showMaskTyped = true;
-  formGroup: FormGroup = new FormGroup({});
+  @Input() placeholder: string = 'Date';
   datePickerVisible = false;
-  private _previousValue: Date;
-  sample;
+  error = false;
+  value: Date;
 
   constructor(
-    // @Inject(Token) private token: any,
-    private cd: ChangeDetectorRef,
-  ) {
-    const date = new Date();
-    console.log('Date', new GsoDate(date).value);
-
-    const string = '12/11/1993';
-    console.log('String', new GsoDate(string, {format: 'MM/dd/yyyy'}).value);
-    const fullString = 'January 10, 2019';
-    console.log('String', new GsoDate(fullString, {format: 'MMMM d, yyyy'}).value);
-    
-    const obj = {
-      year: 1993,
-      month: 3,
-      day: 3
-    };
-    
-    console.log('Object', new GsoDate(obj).value);
-  }
+    @Optional() @Host() @SkipSelf()
+    private controlContainer: ControlContainer
+  ) { }
 
   ngOnInit() {
-    this.formGroup.addControl(this.formControlName, new FormControl());
+    // this.formGroup.addControl(this.formControlName, new FormControl()); // Adds dummy formGroup b/c formControls can't stand alone
   }
 
-  get formControl(): AbstractControl {
-    const existingControl = this.formGroup.get(this.formControlName);
-    return existingControl ? existingControl : new FormControl(null); // Error guard
-  }
+  // get formControl(): AbstractControl {
+  //   const existingControl = this.formGroup.get(this.formControlName);
+  //   return existingControl ? existingControl : new FormControl(null); // Error guard
+  // }
 
-  public onTouched: () => void = () => { };
+  _onChange = (v) => { };
+  _onTouched = () => { };
 
-  // Initial setting of formControlName from parent component
+  public _onValidate: () => void = () => { };
+
+
+  // Initial setting of formControlName from parent component upon load
   writeValue(initialLoadValue: any): void {
-    initialLoadValue && this.formControl.patchValue(initialLoadValue, { emitEvent: false });
-    this._previousValue = initialLoadValue;
+    console.log('Initial', initialLoadValue);
+    this.value = initialLoadValue;
   }
 
   registerOnChange(fn: any): void {
-    this.formControl.valueChanges.subscribe(fn);
+    this._onChange = fn;
+    console.log(this._onChange);
   }
   registerOnTouched(fn: any): void {
-    this.onTouched = fn;
+    this._onTouched = fn;
   }
   setDisabledState?(isDisabled: boolean): void {
-    isDisabled ? this.formControl.disable() : this.formControl.enable();
+    // isDisabled ? this.formControl.disable() : this.formControl.enable();
   }
 
-  validate(c: AbstractControl): ValidationErrors | null {
-    return this.formControl.errors;
+  validate(c: FormControl): any {
+    console.log(c.value, c.errors);
+
+    return c.errors;
+  }
+
+  registerOnValidatorChange(fn: any): void {
+    console.log('Register validator change', fn);
+    this._onChange = fn;
   }
 
   togglePicker(): void {
     this.datePickerVisible = !this.datePickerVisible;
   }
 
-  get datePickerValue() {
-    return this._previousValue;
+  get datePickerValue(): Date {
+    return this.value;
   }
 
-  set datePickerValue(value: Date) {
-    if (value) this._previousValue = value;
-    this.formControl.patchValue(this._previousValue);
+  set datePickerValue(newValue) {
+    this.value = newValue;
+    this._onChange(newValue);
   }
 
   onInputBlur(event: any) {
     const incomingValue = event.target.value;
 
     if (incomingValue) {
-      const incomingValuetoNgb = this.parse(incomingValue);
-      if (incomingValuetoNgb.month <= 12 && incomingValuetoNgb.day <= 31) {
-        const incomingValueToDate = new Date(incomingValuetoNgb.year, incomingValuetoNgb.month - 1, incomingValuetoNgb.day);
-        this.formControl.patchValue(incomingValueToDate);
-      } else {
-        this.formControl.patchValue(incomingValue);
-      }
+      const gsoDate = GsoDate(incomingValue);
+
+      this.value = gsoDate.value;
+      // this.formControl.patchValue(gsoDate.valid ? gsoDate.value : incomingValue);
+      this._onChange(gsoDate.value);
     } else {
-      this.formControl.reset();
-    }
-  }
-
-  toInteger(value: any): number {
-    return parseInt(`${value}`, 10);
-  }
-
-  isNumber(value: any): value is number {
-    return !isNaN(this.toInteger(value));
-  }
-
-  parse(date: any): NgbDateStruct {
-    if (date.trim) {
-      const dateParts = date.trim().split('/'); // Splits at forwards slashes and dashes
-
-      if (dateParts.length === 1 && this.isNumber(dateParts[0])) {
-        return {
-          year: null,
-          month: this.toInteger(dateParts[0]),
-          day: null
-        };
-      } else if (dateParts.length === 2 && this.isNumber(dateParts[0]) && this.isNumber(dateParts[1])) {
-        return {
-          year: null,
-          month: this.toInteger(dateParts[0]),
-          day: this.toInteger(dateParts[1])
-        };
-      } else if (dateParts.length === 3 && this.isNumber(dateParts[0]) && this.isNumber(dateParts[1]) && this.isNumber(dateParts[2])) {
-        return {
-          year: this.toInteger(dateParts[2]),
-          month: this.toInteger(dateParts[0]),
-          day: this.toInteger(dateParts[1])
-        };
-      }
+      this._onChange(null);
     }
   }
 }

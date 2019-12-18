@@ -36,7 +36,7 @@ type DateFormatter = (date: Date, locale: string, offset: number) => string;
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
-export abstract class NgNativeDatePipe {
+export abstract class GsoDateUtil {
   protected ISO8601_DATE_REGEX =
     /^(\d{4})-?(\d\d)-?(\d\d)(?:T(\d\d)(?::?(\d\d)(?::?(\d\d)(?:\.(\d+))?)?)?(Z|([+-])(\d\d):?(\d\d))?)?$/;
   //    1        2       3         4          5          6          7          8  9     10      11
@@ -212,7 +212,7 @@ export abstract class NgNativeDatePipe {
   protected dateGetter(
     name: DateType, size: number, offset: number = 0, trim = false,
     negWrap = false): DateFormatter {
-    return function (date: Date, locale: string): string {
+    return (date: Date, locale: string): string => {
       let part = this.getDatePart(name, date);
       if (offset > 0 || part > -offset) {
         part += offset;
@@ -260,7 +260,7 @@ export abstract class NgNativeDatePipe {
   protected dateStrGetter(
     name: TranslationType, width: TranslationWidth, form: FormStyle = FormStyle.Format,
     extended = false): DateFormatter {
-    return function (date: Date, locale: string): string {
+    return (date: Date, locale: string): string => {
       return this.getDateTranslation(date, locale, name, width, form, extended);
     };
   }
@@ -324,7 +324,7 @@ export abstract class NgNativeDatePipe {
    * extended = +04:30)
    */
   protected timeZoneGetter(width: ZoneWidth): DateFormatter {
-    return function (date: Date, locale: string, offset: number) {
+    return (date: Date, locale: string, offset: number) => {
       const zone = -1 * offset;
       const minusSign = getLocaleNumberSymbol(locale, NumberSymbol.MinusSign);
       const hours = zone > 0 ? Math.floor(zone / 60) : Math.ceil(zone / 60);
@@ -365,7 +365,7 @@ export abstract class NgNativeDatePipe {
   }
 
   protected weekGetter(size: number, monthBased = false): DateFormatter {
-    return function (date: Date, locale: string) {
+    return (date: Date, locale: string) => {
       let result;
       if (monthBased) {
         const nbDaysBefore1stDayOfMonth =

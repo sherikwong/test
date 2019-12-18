@@ -1,4 +1,4 @@
-<div *ngIf="group.get('control').errors">
+<div *ngIf="group.get('control') && group.get('control').errors">
     <h2>
         ERROR
     </h2>
