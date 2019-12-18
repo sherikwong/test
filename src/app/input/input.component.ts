@@ -46,6 +46,8 @@ export class MaskedDatePickerInputComponent implements OnInit, ControlValueAcces
 
     const string = '12/11/1993';
     console.log('String', new GsoDate(string, {format: 'MM/dd/yyyy'}).value);
+    const fullString = 'January 10, 2019';
+    console.log('String', new GsoDate(fullString, {format: 'MMMM d, yyyy'}).value);
     
     const obj = {
       year: 1993,
