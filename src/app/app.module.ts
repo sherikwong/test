@@ -10,6 +10,7 @@ import { TransformDatePipe } from './date-pipe.pipe';
 import {DateValidatorService} from './validators';
 import { OffComponent } from './view-encapsulation/off/off.component';
 import { OnComponent } from './view-encapsulation/on/on.component';
+import { ErrorSubscriptionComponent } from './error-subscription/error-subscription.component';
 
 @NgModule({
   declarations: [
@@ -17,7 +18,8 @@ import { OnComponent } from './view-encapsulation/on/on.component';
     MaskedDatePickerInputComponent,
     TransformDatePipe,
     OffComponent,
-    OnComponent
+    OnComponent,
+    ErrorSubscriptionComponent
   ],
   imports: [
     BrowserModule,
