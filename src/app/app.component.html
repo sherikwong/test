@@ -1,4 +1,4 @@
-<div *ngIf="group.get('control') && group.get('control').errors">
+<!-- <div *ngIf="group.get('control') && group.get('control').errors">
     <h2>
         ERROR
     </h2>
@@ -7,4 +7,9 @@
 <form [formGroup]="group">
     <label>Control</label>
     <masked-date-picker-input formControlName="control" placeholder="Date"></masked-date-picker-input>
-</form>
+</form> -->
+
+<div class="container">
+    <app-on></app-on>
+    <app-off></app-off>
+</div>

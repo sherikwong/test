@@ -1,6 +1,6 @@
-import { Component, forwardRef, OnInit, Input, OnChanges, SimpleChanges, Optional, Host, SkipSelf } from '@angular/core';
-import { Validator, NG_VALUE_ACCESSOR, NG_VALIDATORS, ControlValueAccessor, FormGroup, FormControl, AbstractControl, ValidationErrors, ControlContainer } from '@angular/forms';
-import { NgbDateAdapter, NgbDateNativeAdapter } from '@ng-bootstrap/ng-bootstrap';
+import { Component, forwardRef, OnInit, Input, OnChanges, SimpleChanges, Optional, Host, SkipSelf, Self, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
+import { Validator, NG_VALUE_ACCESSOR, NG_VALIDATORS, ControlValueAccessor, FormGroup, FormControl, AbstractControl, ValidationErrors, ControlContainer, NgControl } from '@angular/forms';
+import { NgbDateAdapter, NgbDateNativeAdapter, NgbDatepicker, NgbPopover } from '@ng-bootstrap/ng-bootstrap';
 import { initialConfig as NgxDefaultConfig, config as NgxMaskConfig } from 'ngx-mask';
 import { GsoDate } from '../date.service';
 
@@ -33,7 +33,10 @@ import { GsoDate } from '../date.service';
     { provide: NgxMaskConfig, useValue: NgxDefaultConfig },
   ]
 })
-export class MaskedDatePickerInputComponent implements OnInit, ControlValueAccessor, Validator {
+export class MaskedDatePickerInputComponent implements AfterViewInit, OnInit, ControlValueAccessor, Validator {
+  ngAfterViewInit(): void {
+    console.log(this.datePickerCalendar);
+  }
   @Input() format: string = 'MM/dd/y';
   @Input() formControlName: string;
   @Input() mask: string = '00/00/0000';
@@ -41,52 +44,53 @@ export class MaskedDatePickerInputComponent implements OnInit, ControlValueAcces
   datePickerVisible = false;
   error = false;
   value: Date;
+  control: FormControl | AbstractControl;
+  validator;
+  @ViewChild('datePickerPop') datePickerCalendar: NgbPopover;
 
   constructor(
     @Optional() @Host() @SkipSelf()
-    private controlContainer: ControlContainer
+    private controlContainer: ControlContainer,
   ) { }
 
   ngOnInit() {
-    // this.formGroup.addControl(this.formControlName, new FormControl()); // Adds dummy formGroup b/c formControls can't stand alone
+    if (this.controlContainer) {
+      if (this.formControlName) {
+        this.validator = this.controlContainer.control.get(this.formControlName).validator;
+      } else {
+        console.error('Form control name does not exist');
+      }
+    } else {
+      console.error('Form control group does not exist');
+    }
   }
 
-  // get formControl(): AbstractControl {
-  //   const existingControl = this.formGroup.get(this.formControlName);
-  //   return existingControl ? existingControl : new FormControl(null); // Error guard
-  // }
+  get formControl(): AbstractControl {
+    const currentControl = this.controlContainer.control.get(this.formControlName);
+    return currentControl ? currentControl : new FormControl(null); // Error guard
+  }
 
   _onChange = (v) => { };
   _onTouched = () => { };
 
-  public _onValidate: () => void = () => { };
-
-
   // Initial setting of formControlName from parent component upon load
   writeValue(initialLoadValue: any): void {
-    console.log('Initial', initialLoadValue);
     this.value = initialLoadValue;
+    this._onChange(initialLoadValue);
   }
 
   registerOnChange(fn: any): void {
     this._onChange = fn;
-    console.log(this._onChange);
   }
   registerOnTouched(fn: any): void {
     this._onTouched = fn;
   }
-  setDisabledState?(isDisabled: boolean): void {
-    // isDisabled ? this.formControl.disable() : this.formControl.enable();
-  }
 
   validate(c: FormControl): any {
-    console.log(c.value, c.errors);
-
-    return c.errors;
+    return this.validator(c);
   }
 
   registerOnValidatorChange(fn: any): void {
-    console.log('Register validator change', fn);
     this._onChange = fn;
   }
 
@@ -99,21 +103,23 @@ export class MaskedDatePickerInputComponent implements OnInit, ControlValueAcces
   }
 
   set datePickerValue(newValue) {
+    this._onTouched();
     this.value = newValue;
-    this._onChange(newValue);
+    this.formControl.patchValue(newValue);
+    this.datePickerCalendar.close();
   }
 
   onInputBlur(event: any) {
+    this._onTouched();
     const incomingValue = event.target.value;
 
     if (incomingValue) {
       const gsoDate = GsoDate(incomingValue);
 
       this.value = gsoDate.value;
-      // this.formControl.patchValue(gsoDate.valid ? gsoDate.value : incomingValue);
-      this._onChange(gsoDate.value);
+      this.formControl.patchValue(gsoDate.valid ? gsoDate.value : incomingValue);
     } else {
-      this._onChange(null);
+      this.formControl.patchValue('');
     }
   }
 }

@@ -1,1 +1,17 @@
-/* You can add global styles to this file, and also import other style files */
+.box {
+    height: 20rem;
+    width: 20rem;
+    border: 1px solid black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 2rem;
+    background-color: red;
+}
+
+.container {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}

@@ -8,12 +8,16 @@ import { NgxMaskModule } from 'ngx-mask'
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TransformDatePipe } from './date-pipe.pipe';
 import {DateValidatorService} from './validators';
+import { OffComponent } from './view-encapsulation/off/off.component';
+import { OnComponent } from './view-encapsulation/on/on.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     MaskedDatePickerInputComponent,
-    TransformDatePipe
+    TransformDatePipe,
+    OffComponent,
+    OnComponent
   ],
   imports: [
     BrowserModule,

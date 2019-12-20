@@ -21,7 +21,7 @@ export class AppComponent implements OnInit {
         value: convertedNgbToDate,
         disabled: false
       }, {
-        validators: Validators.required,
+        validators: Validators.compose([Validators.required]),
       } as AbstractControlOptions)
     };
 

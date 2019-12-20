@@ -1,11 +1,18 @@
 <ng-container *ngIf="formControlName">
     <div class="masked-input__wrapper">
         <div class="masked-input__group">
-            <input [placeholder]="placeholder" (blur)="onInputBlur($event)" [value]="value | transformDate: format" [mask]="mask" [dropSpecialCharacters]="false" />
-            <button (click)="togglePicker()" type=" button">Pick</button>
+            <input [placeholder]="placeholder" [disabled]="formControl.disabled" (blur)="onInputBlur($event)" [value]="value | transformDate: format" [mask]="mask" [dropSpecialCharacters]="false" />
+            <button (click)="togglePicker()" type=" button" [disabled]="formControl.disabled">Pick</button>
         </div>
         <div class="masked-input__calendar">
             <ngb-datepicker #dp *ngIf="datePickerVisible" (select)="togglePicker()" [(ngModel)]="datePickerValue" (navigate)="date = $event.next"></ngb-datepicker>
         </div>
     </div>
 </ng-container>
+
+
+<ng-template #popContent>Hello, <b>{{name}}</b>!</ng-template>
+<ng-template #popTitle>Fancy <b>content!!</b></ng-template>
+<button type="button" class="btn btn-outline-secondary" [ngbPopover]="popContent" [popoverTitle]="popTitle" #datePickerPop="ngbPopover">
+  I've got markup and bindings in my popover!
+</button>
