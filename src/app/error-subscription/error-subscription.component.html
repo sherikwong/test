@@ -1,17 +1,12 @@
 <div [formGroup]="formGroup" *ngIf="formGroup">
-    <div class="d-flex">
-        <input formControlName="control1" type="text" />
+    <div class="d-flex" *ngFor="let control of formGroup.controls | keyvalue">
+        <input [formControlName]="control.key" type="text" />
         <div *ngIf="errorMessages">
-            <span *ngFor="let error of errorMessages.control1"></span>
-        </div>
-    </div>
-    <div class="d-flex">
-        <input formControlName="control2" type="text" />
-        <div *ngIf="errorMessages">
-            <span *ngFor="let error of errorMessages.control2"></span>
+            <span *ngFor="let error of errorMessages[control.key]"></span>
         </div>
     </div>
 </div>
 
-<button (click)="button()">Hello</button>
-<button (click)="check()">Hello</button>
+<button (click)="button()">Restart</button>
+<button (click)="check()">Form</button>
+<button (click)="addControl()">Add</button>
