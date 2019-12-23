@@ -21,7 +21,7 @@ export class AppComponent implements OnInit {
         value: convertedNgbToDate,
         disabled: false
       }, {
-        validators: Validators.compose([Validators.required]),
+        validators: Validators.compose([Validators.required, Validators.requiredTrue]),
       } as AbstractControlOptions)
     };
 
@@ -36,6 +36,4 @@ export class AppComponent implements OnInit {
   group: FormGroup;
 
   constructor(private fb: FormBuilder, private dateValidatorsService: DateValidatorService) { }
-
-
 }
