@@ -52,6 +52,7 @@ export class ErrorSubscriptionComponent implements OnInit {
 
     return this.formGroupControlsChanged(formGroup).pipe(
       tap(({ deleted, added }: FormGroupChanges) => {
+        console.log('If yes, then update observables.', added, deleted);
         if (added) {
           const newObservers = this.createErrorMessageObservables(added.reduce((accum, controlName) => {
             accum[controlName] = this.formGroup.get(controlName);
@@ -59,51 +60,55 @@ export class ErrorSubscriptionComponent implements OnInit {
           }, {}));
           this.combinedErrorObserv = merge(this.combinedErrorObserv, newObservers);
         } else if (deleted) {
-          this.removeObservables(deleted);
+          // this.removeObservables(deleted);
         }
       }),
       withLatestFrom(this.combinedErrorObserv),
-      map(([change, controls]) => controls)
+      map(([change, controls]) => {
+        console.log('Updated controls', controls);
+        return controls;
+      })
     );
   }
 
-  private massageToLabelResult(observers) {
-    return combineLatest(...observers).pipe(
-      map(allErrors => {
-        const updatedLabeledErrors = allErrors.reduce((accum, allControlErrors: ErrorDetails[]) => {
-          const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, { controlName, errorMessage }: ErrorDetails) => {
-            dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
-            return dummyAccum;
-          }, {} as any);
-          return { ...accum, ...currentControlErrorMessages };
-        }, {});
-        return updatedLabeledErrors;
-      })
-    )
-  }
+  private formGroupControlsChanged(formGroup: FormGroup): Observable<FormGroupChanges> {
+    return formGroup.valueChanges.pipe(
+      map(newFormGroup => {
+        const oldFormControlNames = Object.keys(this.oldFormGroup);
+        const newFormControlNames = Object.keys(newFormGroup);
 
-  private removeObservables(controlNames: string[]): void {
-    console.log(`Deleted observables for -  ${controlNames.join(' ')}`);
-    controlNames.forEach((controlName: string) => {
-      this.combinedErrorObserv = this.combinedErrorObserv.pipe(
-        filter(value => {
-          return value;
-        })
-      )
-    });
+        const changedControls = {
+          deleted: null,
+          added: null
+        } as FormGroupChanges;
+
+        if (oldFormControlNames.length !== newFormControlNames.length) {
+          if (newFormControlNames.length) {
+            if (oldFormControlNames.length < newFormControlNames.length) {
+              changedControls.added = binarySearchArrays(oldFormControlNames, newFormControlNames);
+              console.log('New controls added:', changedControls.added);
+            } else if (oldFormControlNames.length > newFormControlNames.length) {
+              changedControls.deleted = binarySearchArrays(oldFormControlNames, newFormControlNames, true);
+            }
+            this.oldFormGroup = newFormGroup;
+          }
+        }
+        console.log('Did any controls change?', changedControls);
+        return changedControls;
+      }),
+    );
   }
 
   private createErrorMessageObservables(formControls: { [key: string]: FormControl | AbstractControl }): Observable<any> {
     const formControlEntries = Object.entries(formControls);
-
     const errorMessagesEntries = Object.entries(this.possibleErrorMessages);
 
     let newObservables;
 
     if (errorMessagesEntries.length || formControlEntries.length) { // If required parameters exist...
-      newObservables = [...formControlEntries].map(([controlName, control]) => { // Loop through form controls
-        return { ...this.createErrorMessageObservable(controlName, control), controlName };
-      });
+      newObservables = [...formControlEntries].reduce((accum, [controlName, control]) => { // Loop through form controls
+        return { ...accum, [controlName]: this.createErrorMessageObservable(controlName, control)};
+      }, {});
       return this.massageToLabelResult(newObservables);
     }
   }
@@ -138,43 +143,42 @@ export class ErrorSubscriptionComponent implements OnInit {
         }
 
         const controlErrors = Array.from(this.formControlsErrors.get(controlName)).map(([errorName, error]) => { // Get the errors for this control
-          // this.allErrorMessages.push(error);
           return { controlName, errorMessage: error } as ErrorDetails; // For each control error, format like so
         });
+        console.log('Control error evaluated for', controlName, controlErrors);
         return controlErrors;
       })
     )
   }
 
-  formGroupControlsChanged(formGroup: FormGroup): Observable<FormGroupChanges> {
-    return formGroup.valueChanges.pipe(
-      map(newFormGroup => {
-        const oldFormControlNames = Object.keys(this.oldFormGroup);
-        const newFormControlNames = Object.keys(newFormGroup);
+  private massageToLabelResult(observers: Observable<any>[]) {
+    return combineLatest(...observers).pipe(
+      map(allErrors => {
+        console.log(allErrors);
+        
+        const updatedLabeledErrors = allErrors.reduce((accum, allControlErrors: ErrorDetails[]) => {
+          const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, { controlName, errorMessage }: ErrorDetails) => {
+            dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
+            return dummyAccum;
+          }, {} as any);
 
-        const changedControls = {
-          deleted: null,
-          added: null
-        } as FormGroupChanges;
+          console.log(currentControlErrorMessages);
+          return { ...accum, ...currentControlErrorMessages };
+        }, {});
+        return updatedLabeledErrors;
+      })
+    )
+  }
 
-        if (oldFormControlNames.length !== newFormControlNames.length) {
-
-
-          if (newFormControlNames.length) {
-            if (oldFormControlNames.length < newFormControlNames.length) {
-              changedControls.added = binarySearchArrays(oldFormControlNames, newFormControlNames);
-              console.log('New controls added:', changedControls.added);
-            } else if (oldFormControlNames.length > newFormControlNames.length) {
-              changedControls.deleted = binarySearchArrays(oldFormControlNames, newFormControlNames, true);
-            }
-            this.oldFormGroup = newFormGroup;
-            console.log(changedControls);
-            return changedControls;
-          }
-        }
-        return changedControls;
-      }),
-    );
+  private removeObservables(controlNames: string[]): void {
+    console.log(`Deleted observables for -  ${controlNames.join(' ')}`);
+    controlNames.forEach((controlName: string) => {
+      this.combinedErrorObserv = this.combinedErrorObserv.pipe(
+        filter(value => {
+          return value;
+        })
+      )
+    });
   }
 
   validator(): ValidationErrors {
