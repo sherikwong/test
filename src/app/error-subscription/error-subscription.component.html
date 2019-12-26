@@ -1,8 +1,9 @@
 <div [formGroup]="formGroup" *ngIf="formGroup">
-    <div class="d-flex" *ngFor="let control of formGroup.controls | keyvalue">
+    <div class="d-flex my-2" *ngFor="let control of formGroup.controls | keyvalue">
         <input [formControlName]="control.key" type="text" />
-        <div *ngIf="errorMessages">
-            <span *ngFor="let error of errorMessages[control.key]"></span>
+        <button (click)="deleteControl(control.key)">X</button>
+        <div class="d-flex w-100 justify-content-between">
+            <span *ngFor="let error of formGroup.get(control.key).errors | keyvalue">{{error.key}}</span>
         </div>
     </div>
 </div>

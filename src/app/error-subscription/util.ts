@@ -1,7 +1,5 @@
 
-export function hasUniqueEntry(array1, array2) {
-  let unique = [];
-
+export function binarySearchArrays(array1: any[], array2: any[], inclusive?: boolean) {
   let smallerArray;
   let largerArray;
   if (array2.length < array1.length) {
@@ -17,9 +15,11 @@ export function hasUniqueEntry(array1, array2) {
   smallerArray = sortedArray(smallerArray);
   largerArray = sortedArray(largerArray);
 
+  const unique = [];
+
   largerArray.forEach(item => {
     const searchResult = binarySearch(smallerArray, item, 0, smallerArray.length);
-    if (!searchResult) {
+    if (inclusive ? searchResult >= 0 : searchResult === null) {
       unique.push(item);
     }
   })
@@ -27,9 +27,9 @@ export function hasUniqueEntry(array1, array2) {
 }
 
 export function binarySearch(array, target, start, end) {
-  if (start >= end) return false;
+  if (start >= end) return null;
   const middle = Math.floor((start + end) / 2);
-  if (target === array[middle]) return true;
+  if (target === array[middle]) return middle;
   if (target > array[middle]) return binarySearch(array, target, middle + 1, end);
   if (target < array[middle]) return binarySearch(array, target, start, middle);
 }
