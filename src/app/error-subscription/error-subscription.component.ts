@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { FormGroup, FormBuilder, AbstractControl, Validators, ValidationErrors, FormControl } from '@angular/forms';
-import { combineLatest, Observable, merge, Subscription } from 'rxjs';
-import { startWith, map, tap, withLatestFrom, filter } from 'rxjs/operators';
+import { combineLatest, Observable, merge, Subscription, Subject } from 'rxjs';
+import { startWith, map, tap, withLatestFrom, filter, scan } from 'rxjs/operators';
 import { binarySearchArrays } from './util';
 
 type ErrorMessage = string | ((controlName?: string, control?: AbstractControl, errorDetails?: { [key: string]: any }) => any);
@@ -25,11 +25,15 @@ export class ErrorSubscriptionComponent implements OnInit {
   formControlsErrors = new Map<string, ControlErrorsMap>();
   oldFormGroup: any;
   possibleErrorMessages: { [key: string]: ErrorMessage };
-  combinedErrorObserv: Observable<any>;
+  errorObservMap: Map<string, Observable<any>> = new Map();
   formGroup: FormGroup;
-  // allErrorMessages: Subscription;
+  formErrors: Subject<any> = new Subject();
 
   constructor(private fb: FormBuilder) { }
+
+  get combinedObserv(): Observable<any> {
+    return combineLatest(...Array.from(this.errorObservMap).map(([nameOfControl, observer]) => observer));
+  }
 
   ngOnInit() {
     this.formGroup = this.fb.group({
@@ -42,31 +46,31 @@ export class ErrorSubscriptionComponent implements OnInit {
       Custom: 'Minimum length blah blah'
     };
 
-    this.errorMessages(this.formGroup).subscribe(value => console.log(value));
+    this.errorMessages(this.formGroup).subscribe(value => console.log('Final result', value));
   }
 
 
   errorMessages(formGroup: FormGroup) {
     if (!this.oldFormGroup) this.oldFormGroup = formGroup.value;
-    this.combinedErrorObserv = this.createErrorMessageObservables(formGroup.controls);
+    Object.entries(formGroup.controls).forEach(([controlName, control]) => {
+      this.errorObservMap.set(controlName, this.createErrorMessageObservable(controlName, control));
+    });
 
     return this.formGroupControlsChanged(formGroup).pipe(
       tap(({ deleted, added }: FormGroupChanges) => {
-        console.log('If yes, then update observables.', added, deleted);
         if (added) {
-          const newObservers = this.createErrorMessageObservables(added.reduce((accum, controlName) => {
-            accum[controlName] = this.formGroup.get(controlName);
-            return accum;
-          }, {}));
-          this.combinedErrorObserv = merge(this.combinedErrorObserv, newObservers);
+          added.forEach(controlName => this.errorObservMap.set(controlName, this.createErrorMessageObservable(controlName, this.formGroup.get(controlName))));
+          // this.formErrors.next(this.errorObservMap);
         } else if (deleted) {
-          // this.removeObservables(deleted);
+
         }
       }),
-      withLatestFrom(this.combinedErrorObserv),
-      map(([change, controls]) => {
-        console.log('Updated controls', controls);
-        return controls;
+      scan((acc, value) => acc.concat(withLatestFrom(...Array.from(this.errorObservMap).map(([key, value]) => value)))));
+      // withLatestFrom(this.combinedObserv.pipe(
+      //   map(value => this.massageOutput(value))
+      // )),
+      map(([change, errorMessages]) => {
+        return this.formErrors.asObservable();
       })
     );
   }
@@ -99,18 +103,41 @@ export class ErrorSubscriptionComponent implements OnInit {
     );
   }
 
-  private createErrorMessageObservables(formControls: { [key: string]: FormControl | AbstractControl }): Observable<any> {
+  private createCombinedErrorMessageObservable(formControls: { [key: string]: FormControl | AbstractControl }): Observable<any> {
+    // console.log('Creating error message observables for', Object.keys(formControls));
     const formControlEntries = Object.entries(formControls);
     const errorMessagesEntries = Object.entries(this.possibleErrorMessages);
 
-    let newObservables;
-
     if (errorMessagesEntries.length || formControlEntries.length) { // If required parameters exist...
-      newObservables = [...formControlEntries].reduce((accum, [controlName, control]) => { // Loop through form controls
-        return { ...accum, [controlName]: this.createErrorMessageObservable(controlName, control)};
-      }, {});
-      return this.massageToLabelResult(newObservables);
+      // const newObservables = [...formControlEntries].reduce((accum, [controlName, control]) => { // Loop through form controls
+      //   return { ...accum, [controlName]: this.createErrorMessageObservable(controlName, control) };
+      // }, {});
+
+      const newObservables = [...formControlEntries].map(([controlName, control]) => this.createErrorMessageObservable(controlName, control));
+      return combineLatest(...newObservables).pipe(
+        map(allErrors => {
+          const updatedLabeledErrors = allErrors.reduce((accum, allControlErrors: ErrorDetails[]) => {
+            const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, { controlName, errorMessage }: ErrorDetails) => {
+              dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
+              return dummyAccum;
+            }, {} as any);
+            return { ...accum, ...currentControlErrorMessages };
+          }, {});
+          return updatedLabeledErrors;
+        })
+      );
     }
+    return null;
+  }
+
+  private massageOutput(errors): any {
+    return errors.reduce((accum, allControlErrors: ErrorDetails[]) => {
+      const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, { controlName, errorMessage }: ErrorDetails) => {
+        dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
+        return dummyAccum;
+      }, {} as any);
+      return { ...accum, ...currentControlErrorMessages };
+    }, {});
   }
 
   private createErrorMessageObservable(controlName: string, control: AbstractControl): Observable<ErrorDetails[]> {
@@ -151,35 +178,16 @@ export class ErrorSubscriptionComponent implements OnInit {
     )
   }
 
-  private massageToLabelResult(observers: Observable<any>[]) {
-    return combineLatest(...observers).pipe(
-      map(allErrors => {
-        console.log(allErrors);
-        
-        const updatedLabeledErrors = allErrors.reduce((accum, allControlErrors: ErrorDetails[]) => {
-          const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, { controlName, errorMessage }: ErrorDetails) => {
-            dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
-            return dummyAccum;
-          }, {} as any);
-
-          console.log(currentControlErrorMessages);
-          return { ...accum, ...currentControlErrorMessages };
-        }, {});
-        return updatedLabeledErrors;
-      })
-    )
-  }
-
-  private removeObservables(controlNames: string[]): void {
-    console.log(`Deleted observables for -  ${controlNames.join(' ')}`);
-    controlNames.forEach((controlName: string) => {
-      this.combinedErrorObserv = this.combinedErrorObserv.pipe(
-        filter(value => {
-          return value;
-        })
-      )
-    });
-  }
+  // private removeObservables(controlNames: string[]): void {
+  //   console.log(`Deleted observables for -  ${controlNames.join(' ')}`);
+  //   controlNames.forEach((controlName: string) => {
+  //     this.combinedErrorObserv = this.combinedErrorObserv.pipe(
+  //       filter(value => {
+  //         return value;
+  //       })
+  //     )
+  //   });
+  // }
 
   validator(): ValidationErrors {
     return {
