@@ -1,25 +1,34 @@
-import { Component, OnInit, OnChanges } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormGroup, FormBuilder, AbstractControl, Validators, ValidationErrors, FormControl } from '@angular/forms';
-import { combineLatest, Observable, merge, Subscribable } from 'rxjs';
-import { EventEmitter } from 'events';
-import { startWith, map as errorSubscription, scan, map, tap } from 'rxjs/operators';
-import { all } from 'q';
+import { combineLatest, Observable, merge } from 'rxjs';
+import { startWith, map, tap, withLatestFrom } from 'rxjs/operators';
+import { hasUniqueEntry } from './util';
 
-type ErrorMessage = string | ((controlName: string, control: AbstractControl, errorDetails?: { [key: string]: any }) => any);
+type ErrorMessage = string | ((controlName?: string, control?: AbstractControl, errorDetails?: { [key: string]: any }) => any);
 type ControlErrorsMap = Map<string, string>;
+
+interface FormGroupChanges {
+  controlNames: string[];
+  change: number;
+  controls: any;
+}
+
+interface ErrorDetails {
+  controlName: string;
+  errorMessage: string;
+}
 
 @Component({
   selector: 'app-error-subscription',
-  templateUrl: './error-subscription.component.html',
-  styleUrls: ['./error-subscription.component.scss']
+  templateUrl: './error-subscription.component.html'
 })
 export class ErrorSubscriptionComponent implements OnInit {
-  formControlsErrors = new Map<string, ControlErrorsMap>(); // All errors for controls w/ type Map<form control name, Map<error name, error message string>>
+  formControlsErrors = new Map<string, ControlErrorsMap>();
   oldFormGroup: any;
-  formGroup: any;
-
-  errorMessages: { [key: string]: ErrorMessage };
-
+  possibleErrorMessages: { [key: string]: ErrorMessage };
+  allErrorObserv;
+  formGroup: FormGroup;
+  allErrorMessages: string[] = [];
 
   constructor(private fb: FormBuilder) { }
 
@@ -29,168 +38,140 @@ export class ErrorSubscriptionComponent implements OnInit {
       control2: [null, Validators.compose([this.validator, Validators.required])]
     });
 
-    this.formGroup.valueChanges.subscribe(value => this.formGroup);
-
-    this.errorMessages = {
-      required: (controlName: string, control: AbstractControl, errorDetails: { [key: string]: any }) => `This field is required`,
+    this.possibleErrorMessages = {
+      required: () => `This field is required`,
       Custom: 'Minimum length blah blah'
     };
 
-    this.button();
-  }
-
-  button() {
-    this.formGroup.valueChanges.pipe(
-      map(newFormGroup => {
-        this.intersection(this.oldFormGroup ? this.oldFormGroup : newFormGroup, newFormGroup);
-        this.oldFormGroup = newFormGroup;
-      }),
-      // map(newFormGroup => {
-      //   this.intersection(this.oldFormGroup ? this.oldFormGroup : newFormGroup, newFormGroup);
-      // })
-    ).subscribe(value => console.log(value));
-    // this.update(this.oldFormGroup, this.errorMessages).subscribe(value => console.log(value));
-  }
-
-  // Edge case: If a form control is added later on?
-  public update(formGroup: FormGroup, possibleErrorMessages, undefinedErrorMessage?: ErrorMessage) {
-    
-
-    // const errorMessagesEntries = Object.entries(possibleErrorMessages);
-    // const formControlEntries = Object.entries(formGroup.controls);
-
-    // if (errorMessagesEntries.length || formControlEntries.length) { // If required parameters exist...
-    //   const allFormControlsErrors = new Map<string, ControlErrorsMap>(); // All errors for controls w/ type Map<form control name, Map<error name, error message string>>
-
-
-
-    //   const errorSubscriptions: any[] = [...formControlEntries].map(([controlName, control]) => { // Loop through form controls
-    //     return control && control.statusChanges.pipe( // Pipe each status change observable from form controls
-    //       startWith(control.valid ? 'VALID' : 'INVALID'), // Feign first response otherwise first touch change will not be registered
-    //       map(validityStatus => this.errorSubscription({ controlName, control, possibleErrorMessages }))
-    //     )
-    //   });
-
-
-    //   return combineLatest(...errorSubscriptions);
-    // }
-    this.intersection(this.formGroup, formGroup)
+    this.controlErrors(this.formGroup).subscribe(value => console.log(value));
   }
 
 
-  // changesToFormGroupControls(formGroup: FormGroup) {
-    // let oldControlsArray = Object.keys(this.oldFormGroup.controls).keys();
-    // let newControlsArray = Object.keys(formGroup.controls).keys();
-    // const lengthOld = Array.from(oldControlsArray).length;
-    // const lengthNew = Array.from(newControlsArray).length;
+  controlErrors(formGroup: FormGroup) {
+    // Possible errors at global level? Do we want separation of concern? doing so many things.
+    if (!this.oldFormGroup) this.oldFormGroup = formGroup.value;
+    this.allErrorObserv = this.createErrorMessageObservables(formGroup.controls);
 
-    // let smallestNumControls;
-    // let largestNumControls;
-
-    // if (lengthOld > lengthNew) {
-    //   let tempArray = oldControlsArray;
-    //   oldControlsArray = newControlsArray;
-    //   newControlsArray = tempArray;
-
-
-    // }
-
-    // smallestNumControls = smallestNumControls.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? ((a.toLowerCase() > b.toLowerCase()) ? 1 : 0) : -1); // Sort A-Z
-
-    // const matchingControlNames = new Set(smallestNumControls);
-
-    // let startIndex = 0;
-    // let endIndex = largestNumControls.length - 1;
-
-    // for 
-
-  // }
-
-  private intersection(arr1, arr2) {
-    arr1 = arr1.length >= 0 ? arr1 : [...Object.keys(arr1)];
-    arr2 = arr2.length >= 0 ? arr2 : [...Object.keys(arr2)];
-
-    let length1 = arr1.length;
-    let length2 = arr2.length;
-
-    if (length1 > length2) {
-      let tempp = arr1;
-      arr1 = arr2;
-      arr2 = tempp;
-
-      let temp = length1;
-      length1 = length2;
-      length2 = temp;
-    } else {
-      let tempp = arr2;
-      arr2 = arr1;
-      arr1 = tempp;
-
-      let temp = length2;
-      length2 = length1;
-      length1 = temp;
-    }
-
-    arr1 = arr1.sort((a, b) => a && b &&  a.toLowerCase() < b.toLowerCase() ? ((a.toLowerCase() > b.toLowerCase()) ? 1 : 0) : -1); // Sort A-Z
-
-    for (let i = 0; i < length2; i++) {
-      if (this.binarySearch(arr1, 0, length1 - 1, arr2[i]) !== -1) {
-        console.log(arr2[i]);
-      }
-    }
-  }
-
-  private binarySearch(array, leftIndex, rightIndex, x) {
-    console.log(array, leftIndex, rightIndex, x);
-    if (rightIndex >= 1) {
-      let mid = 1 + (rightIndex - 1) / 2;
-
-      const middleEl = array[mid].toLowerCase();
-      const currentEl = x.toLowerCase();
-
-      if (middleEl === currentEl) return mid;
-      if (middleEl > currentEl) return this.binarySearch(array, leftIndex, mid - 1, x);
-      if (middleEl < currentEl) return this.binarySearch(array, leftIndex, mid + 1, x);
-
-      return -1;
-    }
-  }
-
-
-  errorSubscription(param) {
-    const controlName = param.controlName;
-    const possibleErrorMessages = param.possibleErrorMessages;
-    const control = param.control;
-
-    if (!control.valid) {
-      this.formControlsErrors.set(controlName, new Map());
-
-      Object.entries(control.errors).forEach(([errorName, errorDetails]) => { // Loop through current control's errors
-        let errorMessage = '';
-        const associatedErrorValue = possibleErrorMessages[errorName as string];
-
-        const evaluateMessage = message => typeof associatedErrorValue === 'function' ? message(controlName, control, errorName, errorDetails) : message; // Evaluate error's value from possibleErrorMessages param
-
-        if (associatedErrorValue) { // If the current control's error evaluation is exists incoming errorMessages
-
-          errorMessage = evaluateMessage(associatedErrorValue); // If fn, evaluated. Otherwise, use string
-          this.formControlsErrors.get(controlName).set(errorName, errorMessage);
-
-        } else { // If error is not defined, use default or passed in error message
-
-          const undefinedErrorMessage = (control) => `There was an error with the field ${controlName} with value ${control.value}`;
-          this.formControlsErrors.get(controlName).set(undefined, undefinedErrorMessage(control));
-
+    const allSubscriptions = this.formGroupControlsChanged(formGroup).pipe(
+      tap((formChanges: FormGroupChanges) => {
+        if (formChanges && formChanges.change) {
+          if (formChanges.change >= 1) {
+            const newObservers = this.createErrorMessageObservables(formChanges.controls);
+            this.allErrorObserv = merge(this.allErrorObserv, newObservers);
+          }
         }
-      })
-    } else {
-      if (!this.formControlsErrors.has(controlName)) this.formControlsErrors.delete(controlName); // If control is valid, delete existing map entry from 
-    }
+      }),
+      withLatestFrom(this.allErrorObserv),
+      map(([change, controls]) => controls)
+    );
 
-    return { name: controlName, errors: Array.from(this.formControlsErrors.get(controlName).values()) };
+    return allSubscriptions;
   }
 
-  validator(control: AbstractControl): ValidationErrors {
+  private massageToLabelResult(observers) {
+    return combineLatest(...observers).pipe(
+      map(allErrors => {
+        const updatedLabeledErrors = allErrors.reduce((accum, allControlErrors: ErrorDetails[]) => {
+          const currentControlErrorMessages = allControlErrors.reduce((dummyAccum, {controlName, errorMessage}: ErrorDetails) => {
+            dummyAccum[controlName] = dummyAccum[controlName] ? [...dummyAccum[controlName], errorMessage] : [errorMessage];
+            return dummyAccum;
+          }, {} as any);
+          return {...accum, ...currentControlErrorMessages};
+        }, {});
+        return updatedLabeledErrors;
+      })
+    )
+  }
+
+  private createErrorMessageObservables(formControls: { [key: string]: FormControl | AbstractControl }): Observable<any> {
+    const errorMessagesEntries = Object.entries(this.possibleErrorMessages);
+    const formControlEntries = Object.entries(formControls);
+
+    let newObservables;
+    
+    if (errorMessagesEntries.length || formControlEntries.length) { // If required parameters exist...
+      newObservables = [...formControlEntries].map(([controlName, control]) => { // Loop through form controls
+        return this.createErrorMessageObservable(controlName, control);
+      });
+      return this.massageToLabelResult(newObservables);
+    }
+  }
+
+  private createErrorMessageObservable(controlName: string, control: AbstractControl): Observable<ErrorDetails[]> {
+    return control && control.statusChanges.pipe( // Pipe each status change observable from form controls
+      startWith(control.valid ? 'VALID' : 'INVALID'), // Feign first response otherwise first touch change will not be registered
+      map(() => {
+        if (!control.valid) {
+          this.formControlsErrors.set(controlName, new Map());
+
+          Object.entries(control.errors).forEach(([errorName, errorDetails]) => { // Loop through current control's errors
+            let errorMessage = '';
+            const associatedErrorValue = this.possibleErrorMessages[errorName as string];
+
+            const evaluateMessage = message => typeof associatedErrorValue === 'function' ? message(controlName, control, errorName, errorDetails) : message; // Evaluate error's value from possibleErrorMessages param
+
+            if (associatedErrorValue) { // If the current control's error evaluation is exists incoming errorMessages
+
+              errorMessage = evaluateMessage(associatedErrorValue); // If fn, evaluated. Otherwise, use string
+              this.formControlsErrors.get(controlName).set(errorName, errorMessage);
+
+            } else { // If error is not defined, use default or passed in error message
+
+              const undefinedErrorMessage = (control) => `There was an error with the field ${controlName} with value ${control.value}`;
+              this.formControlsErrors.get(controlName).set(undefined, undefinedErrorMessage(control));
+
+            }
+          })
+        } else {
+          if (!this.formControlsErrors.has(controlName)) this.formControlsErrors.delete(controlName); // If control is valid, delete existing map entry from
+        }
+
+        const controlErrors = Array.from(this.formControlsErrors.get(controlName)).map(([errorName, error]) => { // Get the errors for this control
+          this.allErrorMessages.push(error);
+          return { controlName, errorMessage: error } as ErrorDetails; // For each control error, format like so
+        });
+        return controlErrors;
+      })
+    )
+  }
+
+  formGroupControlsChanged(formGroup: FormGroup): Observable<FormGroupChanges> {
+    return formGroup.valueChanges.pipe(
+      map(newFormGroup => {
+        const oldFormControlNames = Object.keys(this.oldFormGroup);
+        const newFormControlNames = Object.keys(newFormGroup);
+
+        const response = {
+          change: null,
+          controlNames: null,
+          controls: null
+        } as FormGroupChanges;
+
+        if (oldFormControlNames.length !== newFormControlNames.length) {
+          const newFormControlsNames = hasUniqueEntry(oldFormControlNames, newFormControlNames);
+          if (newFormControlsNames.length) {
+            if (oldFormControlNames.length < newFormControlNames.length) {
+              console.log('New controls added:', newFormControlsNames);
+              response.change = 1;
+            } else if (oldFormControlNames.length > newFormControlNames.length) {
+              console.log('Controls deleted:', newFormControlsNames);
+              response.change = -1;
+            } else {
+              console.log('Changes made:', newFormControlsNames);
+              response.change = 0;
+            }
+            this.oldFormGroup = newFormGroup;
+            response.controlNames = newFormControlNames;
+            response.controls = newFormControlNames.reduce((accum, controlName) => ({...accum, [controlName]: formGroup.get(controlName)}), {});
+            return response;
+          }
+        }
+        return null;
+      }),
+    );
+  }
+
+  validator(): ValidationErrors {
     return {
       'Custom': {
         valid: false,
@@ -203,8 +184,24 @@ export class ErrorSubscriptionComponent implements OnInit {
     console.log(this.formGroup.controls);
   }
 
-  addControl() {
-    this.formGroup.addControl('control3', new FormControl(false, this.validator));
-  }
-}
+  // addControl() {+
+    ZA
+  //   this.formGroup.addControl(`control${Object.keys(this.formGroup.controls).length + 1}`, new FormControl(null, this.validator));
+  // }
 
+  addControl() {
+    const num = 1;
+    new Array(num).fill(null).forEach(() => {
+      const numControl = Object.keys(this.formGroup.controls).length + 1;
+      this.formGroup.addControl(`control${numControl}`, new FormControl(null, this.validator));
+      this.formGroup.get(`control${numControl}`).setErrors(this.validator);
+    });
+  }
+
+  deleteControl(name) {
+    console.log(`Deleted ${name}`);
+    this.formGroup.removeControl(name);
+  }
+
+
+}
