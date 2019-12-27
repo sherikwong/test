@@ -1,4 +1,4 @@
-<div [formGroup]="formGroup" *ngIf="formGroup">
+<div [formGroup]="formGroup" *ngIf="formGroup" class="w-100">
     <div class="d-flex my-2" *ngFor="let control of formGroup.controls | keyvalue">
         <input [formControlName]="control.key" type="text" />
         <button (click)="deleteControl(control.key)">X</button>

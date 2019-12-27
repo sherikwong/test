@@ -31,6 +31,7 @@ export class ErrorSubscriptionComponent implements OnInit {
   formErrors: Subject<any> = new Subject();
   counter = 0;
   subscription;
+  blah;
 
   constructor(private fb: FormBuilder) { }
 
@@ -47,7 +48,7 @@ export class ErrorSubscriptionComponent implements OnInit {
       la: 'asofiahjsfoij'
     };
 
-    this.subscription = this.errorMessages(this.formGroup).subscribe(value => { console.log('Final result', value); console.log('=======================') });
+    this.subscription = this.errorMessages(this.formGroup).subscribe(value => { console.log('Final result', value); console.log('======================='); this.blah = value; });
   }
 
   restart() {
@@ -56,40 +57,18 @@ export class ErrorSubscriptionComponent implements OnInit {
   }
 
 
-  errorMessages(formGroup: FormGroup) {
+  errorMessages(formGroup) {
     if (!this.oldFormGroup) this.oldFormGroup = formGroup.value;
-    Object.entries(formGroup.controls).forEach(([controlName, control]) => {
-      this.errorObservMap[controlName] = this.createErrorMessageObservable(controlName, control);
-    });
 
-
-    return this.recurse(formGroup).pipe(
-      map((nestedErrors: any) => {
-        const flattenedErrors = nestedErrors.flat(2);
-        const labeledErrors = this.labelControlErrors(flattenedErrors);
-        return labeledErrors;
-      })
-    );
-    
-  }
-
-  recurse(formGroup) {
-    return zip(this.formGroupControlsChanged(formGroup), combineLatest(...Object.values(this.errorObservMap) as any)).pipe(
-      switchMap(([changes, errors]: any) => {
-        if (changes) {
-          if (changes.added) {
-            const newObservable = this.createErrorMessageObservable(changes.added, this.formGroup.get(changes.added));
-            this.errorObservMap[changes.added] = newObservable;
-
-            return this.recurse(formGroup);
-          } else if (changes.deleted) {
-
-          }
-        }
-        return of(errors);
-      })
+    return this.formGroupControlsChanged(formGroup).pipe(
+      map(changes => {
+        const observables = Object.entries(formGroup.controls).map(([controlName, control]) => this.createErrorMessageObservable(controlName, control as AbstractControl));
+        return { changes, observables };
+      }),
+      switchMap((({changes, observables}) => combineLatest(of(changes), combineLatest(...observables)))),
     )
   }
+
 
   private formGroupControlsChanged(formGroup: FormGroup): Observable<FormGroupChanges> {
     const oldFormControlNames = Object.keys(this.oldFormGroup);
@@ -170,7 +149,6 @@ export class ErrorSubscriptionComponent implements OnInit {
         const controlErrors = Array.from(this.formControlsErrors.get(controlName)).map(([errorName, error]) => { // Get the errors for this control
           return { controlName, errorMessage: error } as ErrorDetails; // For each control error, format like so
         });
-        // console.log('Control error evaluated for', controlName, controlErrors);
         return controlErrors;
       })
     )
@@ -198,6 +176,7 @@ export class ErrorSubscriptionComponent implements OnInit {
 
   check() {
     console.log(this.formGroup.controls);
+    console.log(this.blah);
   }
 
   addControl() {
