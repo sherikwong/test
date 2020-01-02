@@ -5,17 +5,21 @@ import { startWith, map, tap, withLatestFrom, filter, scan, switchMap, mergeMap,
 import { binarySearchArrays } from './util';
 import { ChangeDetectorStatus } from '@angular/core/src/change_detection/constants';
 
-type ErrorMessage = string | ((controlName?: string, control?: AbstractControl, errorDetails?: { [key: string]: any }) => any);
-type ControlErrorsMap = Map<string, string>;
+export type IFormValidatorErrorFn = (name: any, control: FormControl) => string
 
-interface FormGroupChanges {
-  deleted: string;
-  added: string;
+export type FormControlErrorMessageFn = ((params: FormControlErrorMessages) => any);
+type FormControlErrorsMap = Map<string, string>;
+
+export interface FormControlErrorMessages {
+    [controlName: string]: { [errorName: string]: string }
 }
 
-interface ErrorDetails {
-  controlName: string;
-  errorMessage: string;
+interface FormControlErrorMessage {
+    controlName: string;
+    errorName: string;
+    control: AbstractControl;
+    value: any;
+    errorDetails: {[key: string]: any};
 }
 
 @Component({
@@ -56,6 +60,32 @@ export class ErrorSubscriptionComponent implements OnInit {
     this.ngOnInit();
   }
 
+  getErrorMessages(formGroup: FormGroup, allErrorFnObj: {[errorName: string]: string | FormControlErrorMessageFn} ) {    
+    return Object.entries(formGroup.controls).reduce((accumMessages, [controlName, control]) => {
+      const thisControlErrors = formGroup.get(controlName).errors;
+      if (thisControlErrors) {
+        
+        const reducedEvaluatedErrors: Map<string, string> = Object.entries(thisControlErrors).reduce((thisControlErrorMessages, [errorName, errorDetails]) => {
+          const errorMessageParams: FormControlErrorMessage = {
+            controlName,
+            control,
+            value: control.value,
+            errorName,
+            errorDetails
+          };
+          
+          const evaluatedMessage = typeof allErrorFnObj[controlName] === 'function' ? (allErrorFnObj[controlName] as FormControlErrorMessageFn)(errorMessageParams) : allErrorFnObj[controlName];
+          
+          thisControlErrorMessages.set(errorName, allErrorFnObj[controlName](errorMessageParams));
+          return thisControlErrorMessages;
+        }, new Map());
+        
+        accumMessages.set(controlName, reducedEvaluatedErrors);
+        return accumMessages;
+      }
+    }, new Map<string, Map<string, string>>());
+  }
+  
 
   errorMessages(formGroup) {
     if (!this.oldFormGroup) this.oldFormGroup = formGroup.value;
