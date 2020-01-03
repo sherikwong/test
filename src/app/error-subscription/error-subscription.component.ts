@@ -6,23 +6,22 @@ import { binarySearchArrays } from './util';
 import { ChangeDetectorStatus } from '@angular/core/src/change_detection/constants';
 
 export type FormControlErrorMessageFn = ((params: FormControlErrorMessageParams) => string);
+export type FormControlErrorMessageEval = Map<any, string | FormControlErrorMessageFn>; // Map<ErrorName, errorString | errorStringFn>
+export type FormControlErrorMessages = Map<any, Map<string, string>>; // Map<ControlName, <ErrorName, EvaluatedErrorMessage>>
 
-export interface FormControlErrorMessageEval {
-  [errorName: string]: string | FormControlErrorMessageFn;
-}
-
-export type FormControlErrorMessages = {
-  [controlName: string]: {
-    [errorName: string]: string;
-  }
-}
-
-interface FormControlErrorMessageParams {
+export interface FormControlErrorMessageParams {
   controlName: string;
   errorName: string;
-  control: AbstractControl;
-  value: any;
-  errorDetails: { [key: string]: any };
+  errorMessage?: string;
+  control?: AbstractControl;
+  value?: any;
+  [key: string]: any;
+}
+
+export interface FormControlErrorMessagesResponse {
+  entries: FormControlErrorMessages;
+  forEach: (cb: (params: FormControlErrorMessageParams) => void) => any;
+  map: (cb: (params: FormControlErrorMessageParams) => void) => any[];
 }
 
 @Component({
@@ -42,22 +41,23 @@ export class ErrorSubscriptionComponent implements OnInit {
       control2: [null, Validators.compose([this.validator, Validators.required])]
     });
 
-    const errorEvaluations: FormControlErrorMessageEval = {
-      required: ({ controlName }) => `The ${controlName} field is required`,
-      'Custom': ({controlName, value}) => `This control(${controlName})'s ${value} is custom`
+    const errorMessageEval: FormControlErrorMessageEval = new Map([
+      ['Custom', (params: FormControlErrorMessageParams) => `The effective date for ${params.controlName} is not a valid date`],
+      ['required', (params: FormControlErrorMessageParams) => `The effective date for ${params.controlName} exceeds a year from today`]
+    ]);
 
-    };
-    
     this.formGroup.valueChanges.subscribe(value => {
-      this.errorMessages = this.getErrorMessages(this.formGroup, errorEvaluations);
-      console.log(this.errorMessages);
+      const errorMessages = this.getErrorMessages(this.formGroup, errorMessageEval);
+      this.errorMessages = errorMessages;
+      this.errorMessages.forEach((params: FormControlErrorMessageParams) => console.log(params.errorMessage));
+      console.log(this.errorMessages.map((params: FormControlErrorMessageParams) => params.errorMessage));
     });
   }
 
   restart() {
     this.ngOnInit();
   }
-  
+
   /**
    * Created to be used within a value/status form group subscription. Given a Map<errorName string, error string | (error params) => string>, output updated error messages
    * 
@@ -76,32 +76,53 @@ export class ErrorSubscriptionComponent implements OnInit {
    * });
    * ```
    */
-  getErrorMessages(formGroup: FormGroup, allErrorFnObj: { [errorName: string]: string | FormControlErrorMessageFn }) {
-    const allMessagesObj: FormControlErrorMessages = Object.entries(formGroup.controls).reduce((allMessages, [controlName, control]) => {
+  getErrorMessages(formGroup: FormGroup, evalErrorFnMap: FormControlErrorMessageEval): FormControlErrorMessagesResponse {
+    const allErrorStrings = new Set<FormControlErrorMessageParams>();
+    
+    const entries: FormControlErrorMessages = Object.entries(formGroup.controls).reduce((allMessages, [controlName, control]) => {
       const thisControlErrors = formGroup.get(controlName).errors;
       if (thisControlErrors) {
 
-        const reducedEvaluatedErrors: {[errorName: string]: string} = Object.entries(thisControlErrors).reduce((thisControlErrorMessages, [errorName, errorDetails]) => {
+        const reducedEvaluatedErrors: Map<string, string> = Object.entries(thisControlErrors).reduce((thisControlErrorMessages, [errorName, errorDetails]) => {
           const errorMessageParams: FormControlErrorMessageParams = {
             controlName,
             control,
             value: control.value,
             errorName,
-            errorDetails
+            ...errorDetails
           };
 
-          const evaluatedMessage = typeof allErrorFnObj[errorName] === 'function' ? (allErrorFnObj[errorName] as FormControlErrorMessageFn)(errorMessageParams) : allErrorFnObj[errorName];
-          thisControlErrorMessages[errorName] = evaluatedMessage;
+          const evaluationFn = evalErrorFnMap.get(errorName);
+          const errorMessage = typeof evaluationFn === 'function' ? (evaluationFn as FormControlErrorMessageFn)(errorMessageParams) : evaluationFn;
+          thisControlErrorMessages.set(errorName, errorMessage);
+          allErrorStrings.add({
+            errorMessage,
+            errorName,
+            controlName
+          });
           return thisControlErrorMessages;
-        }, {});
+        }, new Map());
 
-        allMessages[controlName] = reducedEvaluatedErrors;
+        allMessages.set(controlName, reducedEvaluatedErrors);
         return allMessages;
       }
-    }, {});
-    return allMessagesObj;
+    }, new Map());
+    
+    const forEach = (callback: (params: FormControlErrorMessageParams) => any) => allErrorStrings.forEach(value => callback(value));
+    
+    const map = (callback: (params: FormControlErrorMessageParams) => any) => {
+      const returnArray = [];
+      allErrorStrings.forEach(value => returnArray.push(callback(value)));
+      return returnArray;
+    };
+    
+    return { entries, forEach, map};
   }
-
+  
+  forEach(params: FormControlErrorMessageParams): any {
+    console.log(params);
+  }
+  
   validator(): ValidationErrors {
     return {
       'Custom': {
